@@ -2,6 +2,13 @@
 
 import sys
 
+# HLT = 0b00000001
+# LDI = 0b10000010
+# PRN = 0b01000111
+# MUL = 0b10100010
+# PUSH = 0b01000101
+# POP = 0b01000110
+
 
 class CPU:
     """Main CPU class."""
@@ -11,34 +18,83 @@ class CPU:
         self.reg = [0] * 8
         self.ram = [0] * 256
         self.pc = 0
+        self.running = False
+        self.SP = 7
+        self.reg[self.SP] = 0xF4
+        self.branchtable = {}
+        self.branchtable[0b00000001] = self.handle_HLT
+        self.branchtable[0b10000010] = self.handle_LDI
+        self.branchtable[0b01000111] = self.handle_PRN
+        self.branchtable[0b10100010] = self.handle_MUL
+        self.branchtable[0b01000101] = self.handle_PUSH
+        self.branchtable[0b01000110] = self.handle_POP
+
+    def handle_HLT(self):
+        self.running = False
+
+    def handle_LDI(self):
+        operand_a = self.ram[self.pc+1]
+        operand_b = self.ram[self.pc+2]
+        self.reg[operand_a] = operand_b
+        self.pc += 3
+
+    def handle_PRN(self):
+        operand_a = self.ram[self.pc+1]
+        print(self.reg[operand_a])
+        self.pc += 2
+
+    def handle_MUL(self):
+        operand_a = self.ram[self.pc+1]
+        operand_b = self.ram[self.pc+2]
+        self.alu('MUL', operand_a, operand_b)
+        self.pc += 3
+
+    def handle_PUSH(self):
+        # Decrement the SP.
+        # Copy the value in the given register to the address pointed to by SP.
+        self.reg[self.SP] -= 1
+        reg_num = self.ram[self.pc+1]
+        value = self.reg[reg_num]
+        address = self.reg[self.SP]
+        self.ram[address] = value
+
+        self.pc += 2
+
+    def handle_POP(self):
+        # Copy the value from the address pointed to by SP to the given register.
+        # Increment SP.
+        reg_num = self.ram[self.pc+1]
+        address = self.reg[self.SP]
+        value = self.ram[address]
+        self.reg[reg_num] = value
+        self.reg[self.SP] += 1
+
+        self.pc += 2
 
     def load(self):
         """Load a program into memory."""
 
+        program_filename = sys.argv[1]
         address = 0
 
-        # For now, we've just hardcoded a program:
+        with open(program_filename) as f:
+            for line in f:
+                line = line.split('#')
+                line = line[0].strip()
 
-        program = [
-            # From print8.ls8
-            0b10000010,  # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111,  # PRN R0
-            0b00000000,
-            0b00000001,  # HLT
-        ]
+                if line == '':
+                    continue
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+                self.ram[address] = int(line, 2)
+                address += 1
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        # elif op == "SUB": etc
+        elif op == "MUL":
+            self.reg[reg_a] *= self.reg[reg_b]
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -64,36 +120,41 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        HLT = 0b00000001
-        LDI = 0b10000010
-        PRN = 0b01000111
 
-        # Using ram_read(), read the bytes at PC+1 and PC+2 from RAM into variables operand_a and operand_b in case the instruction needs them
-        operand_a = self.ram_read(self.pc+1)
-        operand_b = self.ram_read(self.pc+2)
-        running = True
+        self.running = True
 
-        while running:
+        while self.running:
             IR = self.ram[self.pc]
-
-            if IR == HLT:
-                # Exit the loop
-                running = False
-
-            elif IR == LDI:
-                # sets a specified register to a specified value
-                self.reg[operand_a] = operand_b
-                self.pc += 3
-
-            elif IR == PRN:
-                # Print to the console the decimal integer value that is stored in the given register.
-                val = self.reg[operand_a]
-                print(val)
-                self.pc += 2
-
+            if self.branchtable[IR]:
+                function = self.branchtable[IR]
+                function()
             else:
                 print("Unknown instruction")
-                running = False
+                self.running = False
+
+            # if IR == HLT:
+            #     # Exit the loop
+            #     running = False
+
+            # elif IR == LDI:
+            #     # sets a specified register to a specified value
+            #     self.reg[operand_a] = operand_b
+            #     self.pc += 3
+
+            # elif IR == PRN:
+            #     # Print to the console the decimal integer value that is stored in the given register.
+            #     val = self.reg[operand_a]
+            #     print(val)
+            #     self.pc += 2
+
+            # elif IR == MUL:
+            #     # Multiply the values in two registers together and store the result in registerA
+            #     self.alu('MUL', operand_a, operand_b)
+            #     self.pc += 3
+
+            # else:
+            #     print("Unknown instruction")
+            #     running = False
 
     def ram_read(self, MAR):
         # MAR is address
