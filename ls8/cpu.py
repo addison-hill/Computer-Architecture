@@ -8,6 +8,9 @@ import sys
 # MUL = 0b10100010
 # PUSH = 0b01000101
 # POP = 0b01000110
+# CALL = 0b01010000
+# RET = 0b00010001
+# ADD = 0b10100000
 
 
 class CPU:
@@ -28,6 +31,9 @@ class CPU:
         self.branchtable[0b10100010] = self.handle_MUL
         self.branchtable[0b01000101] = self.handle_PUSH
         self.branchtable[0b01000110] = self.handle_POP
+        self.branchtable[0b01010000] = self.handle_CALL
+        self.branchtable[0b00010001] = self.handle_RET
+        self.branchtable[0b10100000] = self.handle_ADD
 
     def handle_HLT(self):
         self.running = False
@@ -47,6 +53,12 @@ class CPU:
         operand_a = self.ram[self.pc+1]
         operand_b = self.ram[self.pc+2]
         self.alu('MUL', operand_a, operand_b)
+        self.pc += 3
+
+    def handle_ADD(self):
+        operand_a = self.ram[self.pc+1]
+        operand_b = self.ram[self.pc+2]
+        self.alu('ADD', operand_a, operand_b)
         self.pc += 3
 
     def handle_PUSH(self):
@@ -70,6 +82,27 @@ class CPU:
         self.reg[self.SP] += 1
 
         self.pc += 2
+
+    def handle_CALL(self):
+        # compute return address
+        return_addr = self.pc + 2
+
+        # push on the stack
+        self.reg[self.SP] -= 1
+        self.ram[self.reg[self.SP]] = return_addr
+
+        # set the PC to the value in the given register
+        reg_num = self.ram[self.pc+1]
+        dest_addr = self.reg[reg_num]
+        self.pc = dest_addr
+
+    def handle_RET(self):
+        # pop return address from top of stack
+        return_addr = self.ram[self.reg[self.SP]]
+        self.reg[self.SP] += 1
+
+        # set the pc
+        self.pc = return_addr
 
     def load(self):
         """Load a program into memory."""
@@ -125,36 +158,12 @@ class CPU:
 
         while self.running:
             IR = self.ram[self.pc]
-            if self.branchtable[IR]:
+            if IR in self.branchtable:
                 function = self.branchtable[IR]
                 function()
             else:
-                print("Unknown instruction")
+                print("Unknown instruction", IR)
                 self.running = False
-
-            # if IR == HLT:
-            #     # Exit the loop
-            #     running = False
-
-            # elif IR == LDI:
-            #     # sets a specified register to a specified value
-            #     self.reg[operand_a] = operand_b
-            #     self.pc += 3
-
-            # elif IR == PRN:
-            #     # Print to the console the decimal integer value that is stored in the given register.
-            #     val = self.reg[operand_a]
-            #     print(val)
-            #     self.pc += 2
-
-            # elif IR == MUL:
-            #     # Multiply the values in two registers together and store the result in registerA
-            #     self.alu('MUL', operand_a, operand_b)
-            #     self.pc += 3
-
-            # else:
-            #     print("Unknown instruction")
-            #     running = False
 
     def ram_read(self, MAR):
         # MAR is address
