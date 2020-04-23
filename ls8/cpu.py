@@ -11,6 +11,10 @@ import sys
 # CALL = 0b01010000
 # RET = 0b00010001
 # ADD = 0b10100000
+# CMP = 0b10100111
+# JMP = 0b01010100
+# JEQ = 0b01010101
+# JNE = 0b01010110
 
 
 class CPU:
@@ -24,6 +28,7 @@ class CPU:
         self.running = False
         self.SP = 7
         self.reg[self.SP] = 0xF4
+        self.FL = 0b00000000
         self.branchtable = {}
         self.branchtable[0b00000001] = self.handle_HLT
         self.branchtable[0b10000010] = self.handle_LDI
@@ -34,6 +39,10 @@ class CPU:
         self.branchtable[0b01010000] = self.handle_CALL
         self.branchtable[0b00010001] = self.handle_RET
         self.branchtable[0b10100000] = self.handle_ADD
+        self.branchtable[0b10100111] = self.handle_CMP
+        self.branchtable[0b01010100] = self.handle_JMP
+        self.branchtable[0b01010101] = self.handle_JEQ
+        self.branchtable[0b01010110] = self.handle_JNE
 
     def handle_HLT(self):
         self.running = False
@@ -104,6 +113,35 @@ class CPU:
         # set the pc
         self.pc = return_addr
 
+    def handle_CMP(self):
+        # Compares the values in two registers. increment PC by 3
+        operand_a = self.ram[self.pc+1]
+        operand_b = self.ram[self.pc+2]
+        self.alu('CMP', operand_a, operand_b)
+        self.pc += 3
+
+    def handle_JMP(self):
+        # Jump to the address stored in the given register.
+        reg_num = self.ram[self.pc+1]
+        # Set the PC to the address stored in the given register.
+        self.pc = self.reg[reg_num]
+
+    def handle_JEQ(self):
+        # If equal flag is set (true), jump to the address stored in the given register.
+        reg_num = self.ram[self.pc+1]
+        if self.FL & 0b00000001 == 1:
+            self.pc = self.reg[reg_num]
+        else:
+            self.pc += 2
+
+    def handle_JNE(self):
+        # If E flag is clear (false, 0), jump to the address stored in the given register.
+        reg_num = self.ram[self.pc+1]
+        if self.FL & 0b00000001 == 0:
+            self.pc = self.reg[reg_num]
+        else:
+            self.pc += 2
+
     def load(self):
         """Load a program into memory."""
 
@@ -128,6 +166,17 @@ class CPU:
             self.reg[reg_a] += self.reg[reg_b]
         elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
+        elif op == "CMP":
+            # 00000LGE
+            if self.reg[reg_a] == self.reg[reg_b]:
+                # set the E flag to 1
+                self.FL = 0b00000001
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                # set the L flag to 1
+                self.FL = 0b00000100
+            elif self.reg[reg_a] > self.reg[reg_b]:
+                # set the G flag to 1
+                self.FL = 0b00000010
         else:
             raise Exception("Unsupported ALU operation")
 
